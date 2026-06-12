@@ -1,0 +1,38 @@
+const Joi = require('joi');
+
+const orderItem = Joi.object({
+  menu_item_id: Joi.number().integer().required()
+    .messages({ 'any.required': 'Menu item ID is required' }),
+  quantity: Joi.number().integer().min(1).required()
+    .messages({ 'any.required': 'Quantity is required', 'number.min': 'Quantity must be at least 1' }),
+  variation_id: Joi.number().integer().optional(),
+  addon_ids: Joi.array().items(Joi.number().integer()).optional(),
+});
+
+const placeOrder = Joi.object({
+  delivery_address_id: Joi.number().integer().required()
+    .messages({ 'any.required': 'Delivery address is required' }),
+  items: Joi.array().items(orderItem).min(1).required()
+    .messages({ 'any.required': 'Order must have at least one item', 'array.min': 'Order must have at least one item' }),
+  payment_method: Joi.string().valid('COD', 'online').default('COD')
+    .messages({ 'any.only': 'Payment method must be COD or online' }),
+  delivery_notes: Joi.string().max(500).optional().allow(''),
+  coupon_code: Joi.string().optional().allow(''),
+});
+
+const cancelOrder = Joi.object({
+  reason: Joi.string().max(500).optional().allow(''),
+});
+
+const updateStatus = Joi.object({
+  status: Joi.string().valid('confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled').required()
+    .messages({ 'any.required': 'Status is required', 'any.only': 'Invalid status value' }),
+  reason: Joi.string().max(500).optional().allow(''),
+});
+
+const assignDeliveryBoy = Joi.object({
+  delivery_boy_id: Joi.number().integer().required()
+    .messages({ 'any.required': 'Delivery boy ID is required' }),
+});
+
+module.exports = { placeOrder, cancelOrder, updateStatus, assignDeliveryBoy };
