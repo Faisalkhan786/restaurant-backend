@@ -15,20 +15,23 @@ exports.getDashboard = async (req, res, next) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const dateFilter = { created_at: { [Op.between]: [today, tomorrow] } };
+    const createdToday = { createdAt: { [Op.between]: [today, tomorrow] } };
+    const updatedToday = { updatedAt: { [Op.between]: [today, tomorrow] } };
 
     // Today's orders count by status
-    const todayOrders = await Order.count({ where: dateFilter });
-    const pendingOrders = await Order.count({ where: { ...dateFilter, status: 'placed' } });
+    // Total, pending, active = based on created_at (orders placed today)
+    const todayOrders = await Order.count({ where: createdToday });
+    const pendingOrders = await Order.count({ where: { ...createdToday, status: 'placed' } });
     const activeOrders = await Order.count({
-      where: { ...dateFilter, status: { [Op.in]: ['confirmed', 'preparing', 'ready', 'out_for_delivery'] } },
+      where: { ...createdToday, status: { [Op.in]: ['confirmed', 'preparing', 'ready', 'out_for_delivery'] } },
     });
-    const deliveredOrders = await Order.count({ where: { ...dateFilter, status: 'delivered' } });
-    const cancelledOrders = await Order.count({ where: { ...dateFilter, status: 'cancelled' } });
+    // Delivered & cancelled = based on updated_at (completed today, regardless of when placed)
+    const deliveredOrders = await Order.count({ where: { ...updatedToday, status: 'delivered' } });
+    const cancelledOrders = await Order.count({ where: { ...updatedToday, status: 'cancelled' } });
 
-    // Today's revenue
+    // Today's revenue = orders delivered today
     const revenueResult = await Order.sum('total', {
-      where: { ...dateFilter, status: 'delivered' },
+      where: { ...updatedToday, status: 'delivered' },
     });
     const todayRevenue = revenueResult || 0;
 
