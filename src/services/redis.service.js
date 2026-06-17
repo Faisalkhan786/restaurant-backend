@@ -20,6 +20,21 @@ const redisService = {
   async blacklistToken(token, expireSeconds = 900) {
     await redis.set(`bl_${token}`, 'true', 'EX', expireSeconds);
   },
+
+  // Store OTP for password reset (10 min expiry)
+  async storeOTP(email, otp, expireSeconds = 600) {
+    await redis.set(`otp_${email}`, otp, 'EX', expireSeconds);
+  },
+
+  // Get stored OTP
+  async getOTP(email) {
+    return redis.get(`otp_${email}`);
+  },
+
+  // Delete OTP after successful reset
+  async deleteOTP(email) {
+    await redis.del(`otp_${email}`);
+  },
 };
 
 module.exports = redisService;

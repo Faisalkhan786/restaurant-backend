@@ -36,4 +36,18 @@ const createUser = Joi.object({
     .messages({ 'any.required': 'Role is required', 'any.only': 'Role must be delivery_boy or admin' }),
 });
 
-module.exports = { register, login, refreshToken, createUser };
+const forgotPassword = Joi.object({
+  email: Joi.string().email().lowercase().required()
+    .messages({ 'any.required': 'Email is required', 'string.email': 'Valid email is required' }),
+});
+
+const resetPassword = Joi.object({
+  email: Joi.string().email().lowercase().required()
+    .messages({ 'any.required': 'Email is required', 'string.email': 'Valid email is required' }),
+  otp: Joi.string().length(6).pattern(/^[0-9]+$/).required()
+    .messages({ 'any.required': 'OTP is required', 'string.length': 'OTP must be 6 digits', 'string.pattern.base': 'OTP must be numeric' }),
+  newPassword: Joi.string().min(6).max(128).required()
+    .messages({ 'any.required': 'New password is required', 'string.min': 'Password must be at least 6 characters' }),
+});
+
+module.exports = { register, login, refreshToken, createUser, forgotPassword, resetPassword };

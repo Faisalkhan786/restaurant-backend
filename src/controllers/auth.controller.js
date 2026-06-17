@@ -4,7 +4,8 @@ const env = require('../config/env');
 const User = require('../models/User');
 const redisService = require('../services/redis.service');
 const { success, error } = require('../utils/response');
-const { BadRequestError, UnauthorizedError, ConflictError } = require('../utils/errors');
+const { BadRequestError, UnauthorizedError, ConflictError, NotFoundError } = require('../utils/errors');
+const emailService = require('../services/email.service');
 
 // Generate tokens
 const generateAccessToken = (user) => {
@@ -160,6 +161,77 @@ exports.logout = async (req, res, next) => {
     await redisService.deleteRefreshToken(req.user.id);
 
     return success(res, null, 'Logged out successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/auth/forgot-password
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundError('No account found with this email');
+    }
+
+    if (!user.is_active) {
+      throw new UnauthorizedError('Account is deactivated');
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store OTP in Redis (10 min expiry)
+    await redisService.storeOTP(email, otp);
+
+    // In development, skip email and return OTP in response
+    if (env.nodeEnv === 'development') {
+      console.log(`[DEV] OTP for ${email}: ${otp}`);
+      return success(res, { otp }, 'OTP sent (dev mode — OTP in response)');
+    }
+
+    // In production, send OTP via email
+    await emailService.sendOTP(email, otp);
+
+    return success(res, null, 'OTP sent to your email');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/auth/reset-password
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    // Verify OTP from Redis
+    const storedOTP = await redisService.getOTP(email);
+    if (!storedOTP) {
+      throw new BadRequestError('OTP expired. Please request a new one');
+    }
+
+    if (storedOTP !== otp) {
+      throw new BadRequestError('Invalid OTP');
+    }
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Update password (beforeUpdate hook will hash it)
+    user.password = newPassword;
+    await user.save();
+
+    // Delete OTP from Redis
+    await redisService.deleteOTP(email);
+
+    // Invalidate existing refresh token so user has to login fresh
+    await redisService.deleteRefreshToken(user.id);
+
+    return success(res, null, 'Password reset successful. Please login with your new password');
   } catch (err) {
     next(err);
   }
